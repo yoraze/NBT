@@ -29,7 +29,7 @@ use function get_class;
 /**
  * This class wraps around the root Tag for NBT files to avoid losing the name information.
  */
-class TreeRoot{
+class TreeRoot implements \JsonSerializable{
 
 	/** @var Tag */
 	private $root;
@@ -61,5 +61,12 @@ class TreeRoot{
 
 	public function __toString(){
 		return "ROOT {\n  " . ($this->name !== "" ? "\"$this->name\" => " : "") . $this->root->toString(1) . "\n}";
+	}
+
+	public function jsonSerialize() : array{
+		return [
+			"name" => $this->getName(),
+			"tag" => $this->getTag()
+		];
 	}
 }

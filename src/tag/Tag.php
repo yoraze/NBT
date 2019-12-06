@@ -26,7 +26,7 @@ namespace pocketmine\nbt\tag;
 use pocketmine\nbt\NbtStreamWriter;
 use function get_class;
 
-abstract class Tag{
+abstract class Tag implements \JsonSerializable{
 
 	/**
 	 * Used for recursive cloning protection when cloning tags with child tags.
@@ -94,5 +94,12 @@ abstract class Tag{
 		if($haveArgs > $wantMaxArgs){
 			throw new \ArgumentCountError("$func() expects at most $wantMaxArgs parameters, $haveArgs given");
 		}
+	}
+
+	public function jsonSerialize() : array{
+		return [
+			"type" => $this->getType(),
+			"value" => $this->getValue()
+		];
 	}
 }
