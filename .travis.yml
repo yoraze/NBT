@@ -6,11 +6,12 @@ php:
  - 7.4
 
 before_script:
- - if [ -n "$GITHUB_ACCESS_TOKEN" ]; then composer config github-oauth.github.com ${GITHUB_ACCESS_TOKEN}; fi;
  - composer install --prefer-dist
+ - echo 'xdebug.max_nesting_level=3000' >> ~/.phpenv/versions/$(phpenv version-name)/etc/conf.d/xdebug.ini
 
 script:
- - ./tests/run-tests.sh
+ - ./vendor/bin/phpstan analyze --no-progress
+ - ./vendor/bin/phpunit --bootstrap vendor/autoload.php --fail-on-warning tests/phpunit
 
 cache:
  directories:

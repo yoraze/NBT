@@ -24,9 +24,12 @@ declare(strict_types=1);
 namespace pocketmine\nbt\tag;
 
 use pocketmine\nbt\NBT;
+use pocketmine\nbt\NbtDataException;
 use pocketmine\nbt\NbtStreamReader;
 use pocketmine\nbt\NbtStreamWriter;
+use pocketmine\nbt\NoSuchTagException;
 use pocketmine\nbt\ReaderTracker;
+use pocketmine\nbt\UnexpectedTagTypeException;
 use function assert;
 use function count;
 use function current;
@@ -87,17 +90,21 @@ final class CompoundTag extends Tag implements \ArrayAccess, \Iterator, \Countab
 	/**
 	 * Returns the tag with the specified name, or null if it does not exist.
 	 *
+	 * @phpstan-template T of Tag
+	 *
 	 * @param string $name
 	 * @param string $expectedClass Class that extends Tag
+	 * @phpstan-param class-string<T> $expectedClass
 	 *
 	 * @return Tag|null
-	 * @throws \RuntimeException if the tag exists and is not of the expected type (if specified)
+	 * @phpstan-return T|null
+	 * @throws UnexpectedTagTypeException if the tag exists and is not of the expected type (if specified)
 	 */
 	public function getTag(string $name, string $expectedClass = Tag::class) : ?Tag{
 		assert(is_a($expectedClass, Tag::class, true));
 		$tag = $this->value[$name] ?? null;
 		if($tag !== null and !($tag instanceof $expectedClass)){
-			throw new \RuntimeException("Expected a tag of type $expectedClass, got " . get_class($tag));
+			throw new UnexpectedTagTypeException("Expected a tag of type $expectedClass, got " . get_class($tag));
 		}
 
 		return $tag;
@@ -126,22 +133,14 @@ final class CompoundTag extends Tag implements \ArrayAccess, \Iterator, \Countab
 	}
 
 	/**
-	 * Sets the specified Tag as a child tag of the CompoundTag at the offset specified by the tag's name. If a tag
-	 * already exists at the offset and the types do not match, an exception will be thrown unless $force is true.
+	 * Sets the specified Tag as a child tag of the CompoundTag at the offset specified by the tag's name.
 	 *
 	 * @param string $name
 	 * @param Tag    $tag
-	 * @param bool   $force
 	 *
 	 * @return $this
 	 */
-	public function setTag(string $name, Tag $tag, bool $force = false) : self{
-		if(!$force){
-			$existing = $this->value[$name] ?? null;
-			if($existing !== null and !($tag instanceof $existing)){
-				throw new \RuntimeException("Cannot set tag at \"$name\": tried to overwrite " . get_class($existing) . " with " . get_class($tag));
-			}
-		}
+	public function setTag(string $name, Tag $tag) : self{
 		$this->value[$name] = $tag;
 		return $this;
 	}
@@ -173,24 +172,25 @@ final class CompoundTag extends Tag implements \ArrayAccess, \Iterator, \Countab
 
 	/**
 	 * Returns the value of the child tag with the specified name, or $default if the tag doesn't exist. If the child
-	 * tag is not of type $expectedType, an exception will be thrown, unless a default is given and $badTagDefault is
-	 * true.
+	 * tag is not of type $expectedType, an exception will be thrown.
 	 *
 	 * @param string $name
 	 * @param string $expectedClass
 	 * @param mixed  $default
-	 * @param bool   $badTagDefault Return the specified default if the tag is not of the expected type.
 	 *
 	 * @return mixed
+	 *
+	 * @throws UnexpectedTagTypeException
+	 * @throws NoSuchTagException
 	 */
-	public function getTagValue(string $name, string $expectedClass, $default = null, bool $badTagDefault = false){
-		$tag = $this->getTag($name, $badTagDefault ? Tag::class : $expectedClass);
+	public function getTagValue(string $name, string $expectedClass, $default = null){
+		$tag = $this->getTag($name, $expectedClass);
 		if($tag instanceof $expectedClass){
 			return $tag->getValue();
 		}
 
 		if($default === null){
-			throw new \RuntimeException("Tag with name \"$name\" " . ($tag !== null ? "not of expected type" : "not found") . " and no valid default value given");
+			throw new NoSuchTagException("Tag \"$name\" does not exist");
 		}
 
 		return $default;
@@ -203,100 +203,91 @@ final class CompoundTag extends Tag implements \ArrayAccess, \Iterator, \Countab
 	/**
 	 * @param string   $name
 	 * @param int|null $default
-	 * @param bool     $badTagDefault
 	 *
 	 * @return int
 	 */
-	public function getByte(string $name, ?int $default = null, bool $badTagDefault = false) : int{
-		return $this->getTagValue($name, ByteTag::class, $default, $badTagDefault);
+	public function getByte(string $name, ?int $default = null) : int{
+		return $this->getTagValue($name, ByteTag::class, $default);
 	}
 
 	/**
 	 * @param string   $name
 	 * @param int|null $default
-	 * @param bool     $badTagDefault
 	 *
 	 * @return int
 	 */
-	public function getShort(string $name, ?int $default = null, bool $badTagDefault = false) : int{
-		return $this->getTagValue($name, ShortTag::class, $default, $badTagDefault);
+	public function getShort(string $name, ?int $default = null) : int{
+		return $this->getTagValue($name, ShortTag::class, $default);
 	}
 
 	/**
 	 * @param string   $name
 	 * @param int|null $default
-	 * @param bool     $badTagDefault
 	 *
 	 * @return int
 	 */
-	public function getInt(string $name, ?int $default = null, bool $badTagDefault = false) : int{
-		return $this->getTagValue($name, IntTag::class, $default, $badTagDefault);
+	public function getInt(string $name, ?int $default = null) : int{
+		return $this->getTagValue($name, IntTag::class, $default);
 	}
 
 	/**
 	 * @param string   $name
 	 * @param int|null $default
-	 * @param bool     $badTagDefault
 	 *
 	 * @return int
 	 */
-	public function getLong(string $name, ?int $default = null, bool $badTagDefault = false) : int{
-		return $this->getTagValue($name, LongTag::class, $default, $badTagDefault);
+	public function getLong(string $name, ?int $default = null) : int{
+		return $this->getTagValue($name, LongTag::class, $default);
 	}
 
 	/**
 	 * @param string     $name
 	 * @param float|null $default
-	 * @param bool       $badTagDefault
 	 *
 	 * @return float
 	 */
-	public function getFloat(string $name, ?float $default = null, bool $badTagDefault = false) : float{
-		return $this->getTagValue($name, FloatTag::class, $default, $badTagDefault);
+	public function getFloat(string $name, ?float $default = null) : float{
+		return $this->getTagValue($name, FloatTag::class, $default);
 	}
 
 	/**
 	 * @param string     $name
 	 * @param float|null $default
-	 * @param bool       $badTagDefault
 	 *
 	 * @return float
 	 */
-	public function getDouble(string $name, ?float $default = null, bool $badTagDefault = false) : float{
-		return $this->getTagValue($name, DoubleTag::class, $default, $badTagDefault);
+	public function getDouble(string $name, ?float $default = null) : float{
+		return $this->getTagValue($name, DoubleTag::class, $default);
 	}
 
 	/**
 	 * @param string      $name
 	 * @param string|null $default
-	 * @param bool        $badTagDefault
 	 *
 	 * @return string
 	 */
-	public function getByteArray(string $name, ?string $default = null, bool $badTagDefault = false) : string{
-		return $this->getTagValue($name, ByteArrayTag::class, $default, $badTagDefault);
+	public function getByteArray(string $name, ?string $default = null) : string{
+		return $this->getTagValue($name, ByteArrayTag::class, $default);
 	}
 
 	/**
 	 * @param string      $name
 	 * @param string|null $default
-	 * @param bool        $badTagDefault
 	 *
 	 * @return string
 	 */
-	public function getString(string $name, ?string $default = null, bool $badTagDefault = false) : string{
-		return $this->getTagValue($name, StringTag::class, $default, $badTagDefault);
+	public function getString(string $name, ?string $default = null) : string{
+		return $this->getTagValue($name, StringTag::class, $default);
 	}
 
 	/**
 	 * @param string     $name
 	 * @param int[]|null $default
-	 * @param bool       $badTagDefault
 	 *
 	 * @return int[]
 	 */
-	public function getIntArray(string $name, ?array $default = null, bool $badTagDefault = false) : array{
-		return $this->getTagValue($name, IntArrayTag::class, $default, $badTagDefault);
+	public function getIntArray(string $name, ?array $default = null) : array{
+		return $this->getTagValue($name, IntArrayTag::class, $default);
 	}
 
 	/*
@@ -306,100 +297,91 @@ final class CompoundTag extends Tag implements \ArrayAccess, \Iterator, \Countab
 	/**
 	 * @param string $name
 	 * @param int    $value
-	 * @param bool   $force
 	 *
 	 * @return $this
 	 */
-	public function setByte(string $name, int $value, bool $force = false) : self{
-		return $this->setTag($name, new ByteTag($value), $force);
+	public function setByte(string $name, int $value) : self{
+		return $this->setTag($name, new ByteTag($value));
 	}
 
 	/**
 	 * @param string $name
 	 * @param int    $value
-	 * @param bool   $force
 	 *
 	 * @return $this
 	 */
-	public function setShort(string $name, int $value, bool $force = false) : self{
-		return $this->setTag($name, new ShortTag($value), $force);
+	public function setShort(string $name, int $value) : self{
+		return $this->setTag($name, new ShortTag($value));
 	}
 
 	/**
 	 * @param string $name
 	 * @param int    $value
-	 * @param bool   $force
 	 *
 	 * @return $this
 	 */
-	public function setInt(string $name, int $value, bool $force = false) : self{
-		return $this->setTag($name, new IntTag($value), $force);
+	public function setInt(string $name, int $value) : self{
+		return $this->setTag($name, new IntTag($value));
 	}
 
 	/**
 	 * @param string $name
 	 * @param int    $value
-	 * @param bool   $force
 	 *
 	 * @return $this
 	 */
-	public function setLong(string $name, int $value, bool $force = false) : self{
-		return $this->setTag($name, new LongTag($value), $force);
+	public function setLong(string $name, int $value) : self{
+		return $this->setTag($name, new LongTag($value));
 	}
 
 	/**
 	 * @param string $name
 	 * @param float  $value
-	 * @param bool   $force
 	 *
 	 * @return $this
 	 */
-	public function setFloat(string $name, float $value, bool $force = false) : self{
-		return $this->setTag($name, new FloatTag($value), $force);
+	public function setFloat(string $name, float $value) : self{
+		return $this->setTag($name, new FloatTag($value));
 	}
 
 	/**
 	 * @param string $name
 	 * @param float  $value
-	 * @param bool   $force
 	 *
 	 * @return $this
 	 */
-	public function setDouble(string $name, float $value, bool $force = false) : self{
-		return $this->setTag($name, new DoubleTag($value), $force);
+	public function setDouble(string $name, float $value) : self{
+		return $this->setTag($name, new DoubleTag($value));
 	}
 
 	/**
 	 * @param string $name
 	 * @param string $value
-	 * @param bool   $force
 	 *
 	 * @return $this
 	 */
-	public function setByteArray(string $name, string $value, bool $force = false) : self{
-		return $this->setTag($name, new ByteArrayTag($value), $force);
+	public function setByteArray(string $name, string $value) : self{
+		return $this->setTag($name, new ByteArrayTag($value));
 	}
 
 	/**
 	 * @param string $name
 	 * @param string $value
-	 * @param bool   $force
 	 *
 	 * @return $this
 	 */
-	public function setString(string $name, string $value, bool $force = false) : self{
-		return $this->setTag($name, new StringTag($value), $force);
+	public function setString(string $name, string $value) : self{
+		return $this->setTag($name, new StringTag($value));
 	}
 
 	/**
 	 * @param string $name
 	 * @param int[]  $value
-	 * @param bool   $force
 	 *
 	 * @return $this
 	 */
-	public function setIntArray(string $name, array $value, bool $force = false) : self{
-		return $this->setTag($name, new IntArrayTag($value), $force);
+	public function setIntArray(string $name, array $value) : self{
+		return $this->setTag($name, new IntArrayTag($value));
 	}
 
 
@@ -467,9 +449,10 @@ final class CompoundTag extends Tag implements \ArrayAccess, \Iterator, \Countab
 			for($type = $reader->readByte(); $type !== NBT::TAG_End; $type = $reader->readByte()){
 				$name = $reader->readString();
 				$tag = NBT::createTag($type, $reader, $tracker);
-				if($name !== ""){ //TODO: reevaluate this condition
-					$result->setTag($name, $tag);
+				if($result->hasTag($name)){
+					throw new NbtDataException("Duplicate key \"$name\"");
 				}
+				$result->setTag($name, $tag);
 			}
 		});
 		return $result;
@@ -477,6 +460,11 @@ final class CompoundTag extends Tag implements \ArrayAccess, \Iterator, \Countab
 
 	public function write(NbtStreamWriter $writer) : void{
 		foreach($this->value as $name => $tag){
+			if(is_int($name)){
+				//PHP sucks
+				//we only cast on seeing an int, because forcibly casting other types might conceal bugs.
+				$name = (string) $name;
+			}
 			$writer->writeByte($tag->getType());
 			$writer->writeString($name);
 			$tag->write($writer);

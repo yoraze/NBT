@@ -59,9 +59,18 @@ class NbtSerializerTest extends TestCase{
 		$reader = clone $serializer;
 		$data = $serializer->write(self::maxDepthProvider());
 
-		$this->expectException(\UnexpectedValueException::class);
+		$this->expectException(NbtDataException::class);
 
 		$offset = 0;
 		$reader->read($data, $offset, 512);
+	}
+
+	/**
+	 * @doesNotPerformAssertions
+	 */
+	public function testCompoundTagIntKeysEncode() : void{
+		$data = new CompoundTag();
+		$data->setInt("1", 1);
+		(new BigEndianNbtSerializer())->write(new TreeRoot($data));
 	}
 }
